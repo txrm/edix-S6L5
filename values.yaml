@@ -1,0 +1,40 @@
+app1:
+  app1:
+    image:
+      repository: rafaelmanzanom/lab4_app1
+      tag: 0.0.1
+    imagePullPolicy: IfNotPresent
+  replicas: 1
+app1Service:
+  ports:
+  - port: 80
+    targetPort: 5000
+  type: ClusterIP
+app2:
+  app2:
+    image:
+      repository: rafaelmanzanom/lab4_app2
+      tag: 0.0.1
+    imagePullPolicy: IfNotPresent
+  replicas: 1
+app2Service:
+  ports:
+  - port: 80
+    targetPort: 5000
+  type: ClusterIP
+kubernetesClusterDomain: cluster.local
+redis:
+  ports:
+  - port: 6379
+    protocol: TCP
+    targetPort: 6379
+  redis:
+    env:
+      master: "true"
+    image:
+      repository: redis
+      tag: 7.2.2-alpine
+  replicas: 1
+  type: ClusterIP
+redisConfig:
+  redisConfig: bind 0.0.0.0

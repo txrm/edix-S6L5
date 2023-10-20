@@ -1,0 +1,195 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "lab5.fullname" . }}-redis-config
+  labels:
+  {{- include "lab5.labels" . | nindent 4 }}
+data:
+  redis-config: {{ .Values.redisConfig.redisConfig | toYaml | indent 1 }}
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "lab5.fullname" . }}-redis
+  labels:
+    app: redis
+  {{- include "lab5.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.redis.replicas }}
+  selector:
+    matchLabels:
+      app: redis
+  serviceName: {{ include "lab5.fullname" . }}-redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+      - command:
+        - redis-server
+        - /redis-master-volume/redis.conf
+        env:
+        - name: MASTER
+          value: {{ quote .Values.redis.redis.env.master }}
+        - name: KUBERNETES_CLUSTER_DOMAIN
+          value: {{ quote .Values.kubernetesClusterDomain }}
+        image: {{ .Values.redis.redis.image.repository }}:{{ .Values.redis.redis.image.tag
+          | default .Chart.AppVersion }}
+        name: redis
+        ports:
+        - containerPort: 6379
+        resources: {}
+        volumeMounts:
+        - mountPath: /redis-master-data-volume
+          name: data
+        - mountPath: /redis-master-volume
+          name: config
+      volumes:
+      - emptyDir: {}
+        name: data
+      - configMap:
+          items:
+          - key: redis-config
+            path: redis.conf
+          name: {{ include "lab5.fullname" . }}-redis-config
+        name: config
+  updateStrategy: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "lab5.fullname" . }}-redis
+  labels:
+    app: redis
+  {{- include "lab5.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.redis.type }}
+  selector:
+    app: redis
+  {{- include "lab5.selectorLabels" . | nindent 4 }}
+  ports:
+	{{- .Values.redis.ports | toYaml | nindent 2 -}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "lab5.fullname" . }}-app1
+  labels:
+  {{- include "lab5.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.app1.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: dev
+      app.kubernetes.io/name: app1
+    {{- include "lab5.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/instance: dev
+        app.kubernetes.io/name: app1
+      {{- include "lab5.selectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+      - env:
+        - name: KUBERNETES_CLUSTER_DOMAIN
+          value: {{ quote .Values.kubernetesClusterDomain }}
+        image: {{ .Values.app1.app1.image.repository }}:{{ .Values.app1.app1.image.tag
+          | default .Chart.AppVersion }}
+        imagePullPolicy: {{ .Values.app1.app1.imagePullPolicy }}
+        name: app1
+        ports:
+        - containerPort: 5000
+          name: http
+          protocol: TCP
+        resources: {}
+      serviceAccountName: default
+      terminationGracePeriodSeconds: 60
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "lab5.fullname" . }}-app1-service
+  labels:
+    app: app1
+  {{- include "lab5.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.app1Service.type }}
+  selector:
+    app: app1
+  {{- include "lab5.selectorLabels" . | nindent 4 }}
+  ports:
+	{{- .Values.app1Service.ports | toYaml | nindent 2 -}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "lab5.fullname" . }}-app2
+  labels:
+  {{- include "lab5.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.app2.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: dev
+      app.kubernetes.io/name: app2
+    {{- include "lab5.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/instance: dev
+        app.kubernetes.io/name: app2
+      {{- include "lab5.selectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+      - env:
+        - name: KUBERNETES_CLUSTER_DOMAIN
+          value: {{ quote .Values.kubernetesClusterDomain }}
+        image: {{ .Values.app2.app2.image.repository }}:{{ .Values.app2.app2.image.tag
+          | default .Chart.AppVersion }}
+        imagePullPolicy: {{ .Values.app2.app2.imagePullPolicy }}
+        name: app2
+        ports:
+        - containerPort: 5000
+          name: http
+          protocol: TCP
+        resources: {}
+      serviceAccountName: default
+      terminationGracePeriodSeconds: 60
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "lab5.fullname" . }}-app2-service
+  labels:
+    app: app2
+  {{- include "lab5.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.app2Service.type }}
+  selector:
+    app: app2
+  {{- include "lab5.selectorLabels" . | nindent 4 }}
+  ports:
+	{{- .Values.app2Service.ports | toYaml | nindent 2 -}}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "lab5.fullname" . }}-nginx-ingress
+  labels:
+  {{- include "lab5.labels" . | nindent 4 }}
+  annotations:
+    kubernetes.io/ingress.class: nginx
+spec:
+  rules:
+  - host: k8s.qualentum.net
+    http:
+      paths:
+      - backend:
+          service:
+            name: '{{ include "lab5.fullname" . }}-app2-service'
+            port:
+              number: 80
+        path: /
+        pathType: Prefix
